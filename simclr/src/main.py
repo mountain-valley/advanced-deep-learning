@@ -304,7 +304,8 @@ def main(args):
     
     # Log final results
     hparams = {k: v for k, v in vars(args).items() if isinstance(v, (str, int, float, bool))}
-    writer.add_hparams(hparams, {'accuracy': final_accuracy}, run_name=args.run_name)
+    writer.add_hparams(hparams, {'hparam/accuracy': final_accuracy}, run_name="hparams")
+    writer.add_scalar('final/accuracy', final_accuracy, 0)
     writer.close()
 
     log_file = os.path.join(args.output_dir, 'results.log')
