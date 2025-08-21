@@ -12,6 +12,8 @@ dependencies = [
     "tqdm>=4.67.1",
     "huggingface_hub>=0.24.0",
     "transformers",
+    "python-dotenv>=1.1.1",
+    "tensorflow>=2.20.0",
 ]
 
 [tool.uv.sources]

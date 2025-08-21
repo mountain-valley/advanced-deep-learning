@@ -1,6 +1,8 @@
 # main.py
 import os
 import argparse
+from datetime import datetime
+import json
 import warnings
 import numpy as np
 from tqdm import tqdm
@@ -18,7 +20,7 @@ from transformers import AutoModel, AutoConfig
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # --- Data Handling ---
-class TwoViewImageFolder(ImageFolder):
+class SimCLRImageFolder(ImageFolder):
     def __getitem__(self, index):
         path, _ = self.samples[index]
         sample = self.loader(path)
@@ -45,16 +47,13 @@ def get_supervised_transform(size, is_train=True):
         ])
 
 def prepare_imagenet_loader(args, simclr=False):
-    # Support either full ImageNet or direct Tiny ImageNet path
-    if getattr(args, 'use_tiny_imagenet', False):
-        base = args.tiny_imagenet_path
-    else:
-        base = args.imagenet_path
+    # Now we always treat --imagenet_path as tiny-imagenet-200 by default
+    base = args.imagenet_path
     train_dir = os.path.join(base, 'train')
     if not os.path.exists(train_dir):
-        raise FileNotFoundError(f"ImageNet/Tiny-ImageNet 'train' directory not found at: {train_dir}")
+        raise FileNotFoundError(f"tiny-imagenet-200 'train' directory not found at: {train_dir}")
     
-    dataset = TwoViewImageFolder(root=train_dir, transform=get_simclr_transform(args.image_size)) if simclr else \
+    dataset = SimCLRImageFolder(root=train_dir, transform=get_simclr_transform(args.image_size)) if simclr else \
               ImageFolder(root=train_dir, transform=get_supervised_transform(args.image_size, is_train=True))
 
     # For SimCLR, prefer dropping the last undersized batch to keep pairs consistent
@@ -65,13 +64,13 @@ def prepare_cifar100_dataloaders(args):
     eval_transform = get_supervised_transform(args.image_size, is_train=False)
     train_transform = get_supervised_transform(args.image_size, is_train=True)
     cifar_root = os.path.join(args.dataset_root, 'cifar100')
-    probe_train_dataset = torchvision.datasets.CIFAR100(root=cifar_root, train=True, transform=eval_transform, download=False)
-    probe_test_dataset = torchvision.datasets.CIFAR100(root=cifar_root, train=False, transform=eval_transform, download=False)
-    probe_train_loader = DataLoader(probe_train_dataset, batch_size=256, shuffle=False, num_workers=2)
-    probe_test_loader = DataLoader(probe_test_dataset, batch_size=256, shuffle=False, num_workers=2)
+    linear_classifier_train_dataset = torchvision.datasets.CIFAR100(root=cifar_root, train=True, transform=eval_transform, download=False)
+    linear_classifier_test_dataset = torchvision.datasets.CIFAR100(root=cifar_root, train=False, transform=eval_transform, download=False)
+    linear_classifier_train_loader = DataLoader(linear_classifier_train_dataset, batch_size=256, shuffle=False, num_workers=2)
+    linear_classifier_test_loader = DataLoader(linear_classifier_test_dataset, batch_size=256, shuffle=False, num_workers=2)
     finetune_train_dataset = torchvision.datasets.CIFAR100(root=cifar_root, train=True, transform=train_transform, download=False)
     finetune_train_loader = DataLoader(finetune_train_dataset, batch_size=args.finetune_batch_size, shuffle=True, num_workers=2)
-    return probe_train_loader, probe_test_loader, finetune_train_loader
+    return linear_classifier_train_loader, linear_classifier_test_loader, finetune_train_loader
 
 # --- Model Architectures & Loss ---
 class SimCLRModel(nn.Module):
@@ -175,7 +174,7 @@ def train_on_imagenet(args, writer, simclr=False, from_scratch=True):
             break
     return model.backbone
 
-def train_end_to_end_on_cifar(args, writer, finetune_train_loader, probe_test_loader, from_scratch=False):
+def train_end_to_end_on_cifar(args, writer, finetune_train_loader, linear_classifier_test_loader, from_scratch=False):
     device = args.device
     start_state = "from Scratch" if from_scratch else "Fine-tuning DINO"
     print(f"\n--- Starting End-to-End Supervised Training on CIFAR-100 ({start_state}) ---")
@@ -205,7 +204,7 @@ def train_end_to_end_on_cifar(args, writer, finetune_train_loader, probe_test_lo
     model.eval()
     correct, total = 0, 0
     with torch.no_grad():
-        for images, labels in tqdm(probe_test_loader, desc="Final Evaluation"):
+        for images, labels in tqdm(linear_classifier_test_loader, desc="Final Evaluation"):
             outputs = model(images.to(device))
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
@@ -214,7 +213,7 @@ def train_end_to_end_on_cifar(args, writer, finetune_train_loader, probe_test_lo
     print(f"Final CIFAR-100 End-to-End Accuracy: {accuracy:.2f}%")
     return accuracy
 
-def evaluate_linear_head(args, writer, backbone, probe_train_loader, probe_test_loader):
+def evaluate_linear_head(args, writer, backbone, linear_classifier_train_loader, linear_classifier_test_loader):
     device = args.device
     print("\n--- Starting Linear Head Evaluation on CIFAR-100 ---")
     backbone.to(device).eval()
@@ -227,22 +226,22 @@ def evaluate_linear_head(args, writer, backbone, probe_train_loader, probe_test_
             features.append(feature.cpu()); labels.append(lbls)
         return torch.cat(features), torch.cat(labels)
 
-    train_features, train_labels = extract_features(probe_train_loader, "Extracting Train Features")
-    test_features, test_labels = extract_features(probe_test_loader, "Extracting Test Features")
+    train_features, train_labels = extract_features(linear_classifier_train_loader, "Extracting Train Features")
+    test_features, test_labels = extract_features(linear_classifier_test_loader, "Extracting Test Features")
 
     classifier = nn.Linear(backbone.config.hidden_size, args.num_cifar_classes).to(device)
-    optimizer = optim.Adam(classifier.parameters(), lr=args.probe_lr)
+    optimizer = optim.Adam(classifier.parameters(), lr=args.linear_classifier_lr)
     criterion = nn.CrossEntropyLoss()
     feature_loader = DataLoader(torch.utils.data.TensorDataset(train_features, train_labels), batch_size=256, shuffle=True)
 
     print("Training the linear head...")
-    for epoch in range(args.probe_epochs):
+    for epoch in range(args.linear_classifier_epochs):
         for step, (features, labels) in enumerate(feature_loader):
             optimizer.zero_grad()
             predictions = classifier(features.to(device))
             loss = criterion(predictions, labels.to(device))
             loss.backward(); optimizer.step()
-            writer.add_scalar('Loss/linear_probe', loss.item(), epoch * len(feature_loader) + step)
+            writer.add_scalar('Loss/linear_linear_classifier', loss.item(), epoch * len(feature_loader) + step)
 
     print("Evaluating the linear head...")
     with torch.no_grad():
@@ -252,44 +251,60 @@ def evaluate_linear_head(args, writer, backbone, probe_train_loader, probe_test_
     print(f"Linear Head Final Accuracy: {accuracy:.2f}%")
     return accuracy
 
+def _build_run_dir(args):
+    """Construct a readable run directory name.
+
+    Pattern: YYYYmmdd-HHMMSS__<base_name>
+    base_name = --run-name if provided else training_mode
+    """
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    base = (args.run_name or args.training_mode).replace(' ', '_')
+    return os.path.join(args.output_dir, 'runs', f"{ts}__{base}")
+
+
 def main(args):
     torch.manual_seed(42)
     np.random.seed(42)
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {args.device}")
-
-    writer = SummaryWriter(log_dir=os.path.join(args.output_dir, 'runs', args.training_mode))
-    probe_train_loader, probe_test_loader, finetune_train_loader = prepare_cifar100_dataloaders(args)
+    run_dir = _build_run_dir(args)
+    os.makedirs(run_dir, exist_ok=True)
+    print(f"Logging to: {run_dir}")
+    writer = SummaryWriter(log_dir=run_dir)
+    # Persist args for easy inspection
+    with open(os.path.join(run_dir, 'args.json'), 'w') as f:
+        json.dump({k: v for k, v in vars(args).items()}, f, indent=2)
+    linear_classifier_train_loader, linear_classifier_test_loader, finetune_train_loader = prepare_cifar100_dataloaders(args)
     final_accuracy = 0.0
 
     # --- Mode Dispatcher ---
     mode = args.training_mode
-    if mode == 'DINO_PRETRAINED_EVAL':
+    if mode == 'pretrained':
         backbone = get_model_backbone(args, pretrained=True)
-        final_accuracy = evaluate_linear_head(args, writer, backbone, probe_train_loader, probe_test_loader)
-    elif mode == 'RANDOM_INIT_EVAL':
+        final_accuracy = evaluate_linear_head(args, writer, backbone, linear_classifier_train_loader, linear_classifier_test_loader)
+    elif mode == 'scratch':
         backbone = get_model_backbone(args, pretrained=False)
-        final_accuracy = evaluate_linear_head(args, writer, backbone, probe_train_loader, probe_test_loader)
-    elif mode == 'SCRATCH_IMAGENET_SIMCLR_PRETRAIN':
+        final_accuracy = evaluate_linear_head(args, writer, backbone, linear_classifier_train_loader, linear_classifier_test_loader)
+    elif mode == 'simclr_scratch':
         backbone = train_on_imagenet(args, writer, simclr=True, from_scratch=True)
-        final_accuracy = evaluate_linear_head(args, writer, backbone, probe_train_loader, probe_test_loader)
-    elif mode == 'SCRATCH_IMAGENET_SUPERVISED_PRETRAIN':
+        final_accuracy = evaluate_linear_head(args, writer, backbone, linear_classifier_train_loader, linear_classifier_test_loader)
+    elif mode == 'supervised_scratch':
         backbone = train_on_imagenet(args, writer, simclr=False, from_scratch=True)
-        final_accuracy = evaluate_linear_head(args, writer, backbone, probe_train_loader, probe_test_loader)
-    elif mode == 'DINO_IMAGENET_SIMCLR_FINETUNE':
+        final_accuracy = evaluate_linear_head(args, writer, backbone, linear_classifier_train_loader, linear_classifier_test_loader)
+    elif mode == 'simclr_pretrained':
         backbone = train_on_imagenet(args, writer, simclr=True, from_scratch=False)
-        final_accuracy = evaluate_linear_head(args, writer, backbone, probe_train_loader, probe_test_loader)
-    elif mode == 'DINO_IMAGENET_SUPERVISED_FINETUNE':
+        final_accuracy = evaluate_linear_head(args, writer, backbone, linear_classifier_train_loader, linear_classifier_test_loader)
+    elif mode == 'supervised_pretrained':
         backbone = train_on_imagenet(args, writer, simclr=False, from_scratch=False)
-        final_accuracy = evaluate_linear_head(args, writer, backbone, probe_train_loader, probe_test_loader)
-    elif mode == 'DINO_CIFAR_SUPERVISED_FINETUNE':
-        final_accuracy = train_end_to_end_on_cifar(args, writer, finetune_train_loader, probe_test_loader, from_scratch=False)
-    elif mode == 'SCRATCH_CIFAR_SUPERVISED_TRAIN':
-        final_accuracy = train_end_to_end_on_cifar(args, writer, finetune_train_loader, probe_test_loader, from_scratch=True)
+        final_accuracy = evaluate_linear_head(args, writer, backbone, linear_classifier_train_loader, linear_classifier_test_loader)
+    elif mode == 'cifar_supervised_pretrained':
+        final_accuracy = train_end_to_end_on_cifar(args, writer, finetune_train_loader, linear_classifier_test_loader, from_scratch=False)
+    elif mode == 'cifar_supervised_scratch':
+        final_accuracy = train_end_to_end_on_cifar(args, writer, finetune_train_loader, linear_classifier_test_loader, from_scratch=True)
     
     # Log final results
     hparams = {k: v for k, v in vars(args).items() if isinstance(v, (str, int, float, bool))}
-    writer.add_hparams(hparams, {'hparam/accuracy': final_accuracy})
+    writer.add_hparams(hparams, {'accuracy': final_accuracy}, run_name=args.run_name)
     writer.close()
 
     log_file = os.path.join(args.output_dir, 'results.log')
@@ -302,37 +317,41 @@ if __name__ == '__main__':
     
     # Required arguments
     parser.add_argument('--training_mode', type=str, required=True, choices=[
-        'DINO_PRETRAINED_EVAL', 'RANDOM_INIT_EVAL', 'SCRATCH_IMAGENET_SIMCLR_PRETRAIN',
-        'SCRATCH_IMAGENET_SUPERVISED_PRETRAIN', 'DINO_IMAGENET_SIMCLR_FINETUNE',
-        'DINO_IMAGENET_SUPERVISED_FINETUNE', 'DINO_CIFAR_SUPERVISED_FINETUNE', 'SCRATCH_CIFAR_SUPERVISED_TRAIN'
+        "pretrained",
+        "scratch",
+        "simclr_scratch",
+        "supervised_scratch",
+        "simclr_pretrained",
+        "supervised_pretrained",
+        "cifar_supervised_pretrained",
+        "cifar_supervised_scratch"
     ], help="The experimental mode to run.")
+    parser.add_argument('--run-name', type=str, default=None, help='Custom name for this run (defaults to training_mode).')
     
     # Paths (offline-friendly defaults)
-    parser.add_argument('--dataset_root', type=str, default='./assets/datasets', help="Root directory containing datasets (cifar100/, imagenet/...).")
-    parser.add_argument('--imagenet_path', type=str, default='./assets/datasets/imagenet', help="Path to ImageNet dataset root containing train/ and val/.")
-    parser.add_argument('--use_tiny_imagenet', action='store_true', help='Use Tiny ImageNet directly instead of full ImageNet.')
-    parser.add_argument('--tiny_imagenet_path', type=str, default='./assets/datasets/tiny-imagenet/tiny-imagenet-200', help='Path to tiny-imagenet-200 root containing train/ and val/.')
+    parser.add_argument('--dataset_root', type=str, default='./data', help="Root directory containing datasets (cifar100/, tiny-imagenet-200/ ...).")
+    parser.add_argument('--imagenet_path', type=str, default='./data/tiny-imagenet-200', help="Path to tiny-imagenet-200 root containing train/ and val/ (used for all *IMAGENET* modes).")
     parser.add_argument('--output_dir', type=str, default='./outputs', help="Directory to save logs and results.")
-    parser.add_argument('--model_name_or_path', type=str, default='./assets/hf_models/facebook/dinov3-vits16-pretrain-lvd1689m', help="Local path or HF id for backbone model.")
+    parser.add_argument('--model_name_or_path', type=str, default='./models/dinov3-vits16-pretrain-lvd1689m', help="Local path (downloaded by setup.py) or HF id for backbone model.")
 
     # General Training Hyperparameters
     parser.add_argument('--image_size', type=int, default=224)
     parser.add_argument('--max_steps', type=int, default=1000, help="Max steps for training. -1 for full epochs.")
     
-    # Pre-training Hyperparameters
+    # Pre-training Hyperparameters (pretraining on Imagenet)
     parser.add_argument('--pretrain_epochs', type=int, default=5)
     parser.add_argument('--pretrain_lr', type=float, default=3e-5)
     parser.add_argument('--pretrain_batch_size', type=int, default=32)
-    parser.add_argument('--num_pretrain_classes', type=int, default=1000)
+    parser.add_argument('--num_pretrain_classes', type=int, default=200, help='Number of classes for supervised pretraining (tiny-imagenet-200 has 200).')
     
-    # Fine-tuning Hyperparameters
+    # Fine-tuning Hyperparameters (training end to end on CIFAR)
     parser.add_argument('--finetune_epochs', type=int, default=10)
     parser.add_argument('--finetune_lr', type=float, default=1e-4)
     parser.add_argument('--finetune_batch_size', type=int, default=32)
     
-    # Linear Probe Hyperparameters
-    parser.add_argument('--probe_epochs', type=int, default=20)
-    parser.add_argument('--probe_lr', type=float, default=1e-3)
+    # Linear Classifier Hyperparameters
+    parser.add_argument('--linear_classifier_epochs', type=int, default=20)
+    parser.add_argument('--linear_classifier_lr', type=float, default=1e-3)
     parser.add_argument('--num_cifar_classes', type=int, default=100)
     
     # SimCLR Hyperparameters

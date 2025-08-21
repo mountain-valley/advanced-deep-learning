@@ -11,9 +11,9 @@ wheels/
 
 # Outputs & logs
 outputs/
-# slurm_logs/
 
 # Additional ignored files
-assets/
+models/
+data/
 uv.lock
 .python-version
