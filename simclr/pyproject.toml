@@ -7,15 +7,25 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.3.2",
     "tensorboard>=2.20.0",
-    "torch>=2.8.0",
-    "torchvision>=0.23.0",
     "tqdm>=4.67.1",
     "huggingface_hub>=0.24.0",
     "transformers",
     "python-dotenv>=1.1.1",
     "tensorflow>=2.20.0",
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
 ]
 
 [tool.uv.sources]
 transformers = { git = "https://github.com/huggingface/transformers" }
+torch = [
+  { index = "pytorch-cu128" },
+]
+torchvision = [
+  { index = "pytorch-cu128" },
+]
 
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

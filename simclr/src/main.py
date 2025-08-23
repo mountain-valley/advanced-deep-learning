@@ -144,7 +144,7 @@ def train_on_imagenet(args, writer, simclr=False, from_scratch=True):
     current_step = 0
     for epoch in range(args.pretrain_epochs):
         pbar_desc = f"{method} Epoch {epoch+1}"
-        pbar = tqdm(train_loader, desc=pbar_desc)
+        pbar = tqdm(train_loader, desc=pbar_desc, miniters=250, mininterval=25)
         epoch_loss_sum = 0.0
         epoch_loss_count = 0
         for data in pbar:
@@ -165,7 +165,7 @@ def train_on_imagenet(args, writer, simclr=False, from_scratch=True):
             epoch_loss_sum += float(loss.item())
             epoch_loss_count += 1
             avg_loss = epoch_loss_sum / max(1, epoch_loss_count)
-            pbar.set_postfix({'Loss': f'{loss.item():.4f}', 'Avg': f'{avg_loss:.4f}'})
+            pbar.set_postfix({'Loss': f'{loss.item():.4f}', 'Avg': f'{avg_loss:.4f}'}, refresh=False)
             
             current_step += 1
             if args.max_steps > 0 and current_step >= args.max_steps: break
@@ -186,7 +186,7 @@ def train_end_to_end_on_cifar(args, writer, finetune_train_loader, linear_classi
     current_step = 0
     for epoch in range(args.finetune_epochs):
         model.train()
-        pbar = tqdm(finetune_train_loader, desc=f"CIFAR Train Epoch {epoch+1}")
+        pbar = tqdm(finetune_train_loader, desc=f"CIFAR Train Epoch {epoch+1}", miniters=250, mininterval=25)
         for images, labels in pbar:
             optimizer.zero_grad()
             predictions = model(images.to(device))
@@ -194,7 +194,7 @@ def train_end_to_end_on_cifar(args, writer, finetune_train_loader, linear_classi
             loss.backward()
             optimizer.step()
             writer.add_scalar('Loss/cifar_train', loss.item(), current_step)
-            pbar.set_postfix({'Loss': f'{loss.item():.4f}'})
+            pbar.set_postfix({'Loss': f'{loss.item():.4f}'}, refresh=False)
             current_step += 1
             if args.max_steps > 0 and current_step >= args.max_steps: break
         if args.max_steps > 0 and current_step >= args.max_steps:
@@ -204,7 +204,7 @@ def train_end_to_end_on_cifar(args, writer, finetune_train_loader, linear_classi
     model.eval()
     correct, total = 0, 0
     with torch.no_grad():
-        for images, labels in tqdm(linear_classifier_test_loader, desc="Final Evaluation"):
+        for images, labels in tqdm(linear_classifier_test_loader, desc="Final Evaluation", miniters=250, mininterval=25):
             outputs = model(images.to(device))
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
@@ -221,7 +221,7 @@ def evaluate_linear_head(args, writer, backbone, linear_classifier_train_loader,
     @torch.no_grad()
     def extract_features(loader, desc):
         features, labels = [], []
-        for images, lbls in tqdm(loader, desc=desc):
+        for images, lbls in tqdm(loader, desc=desc, miniters=10):
             feature = backbone(pixel_values=images.to(device)).last_hidden_state[:, 0, :]
             features.append(feature.cpu()); labels.append(lbls)
         return torch.cat(features), torch.cat(labels)
@@ -314,6 +314,7 @@ def main(args):
         f.write(f"Mode: {args.training_mode}, Accuracy: {final_accuracy:.2f}%\n")
 
 if __name__ == '__main__':
+    print(f"Torch version: {torch.__version__}")
     parser = argparse.ArgumentParser(description="SimCLR and Supervised Training Framework")
     
     # Required arguments
