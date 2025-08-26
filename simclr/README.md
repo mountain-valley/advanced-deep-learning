@@ -181,7 +181,7 @@ This lab will focus on implementing and replicating results from the SimCLR pape
 
 1. Implement the model class: `SimCLRModel`
     1. Instead of a classifier head, add a projection head as defined in section 2.1 of [https://arxiv.org/pdf/2002.05709](https://arxiv.org/pdf/2002.05709).
-2. Implement the dataset helper function `get_simclr_transform(size)`  which returns a random transformatoin
+2. Implement the dataset helper function `get_simclr_transform(size)`  which returns a random transformation.
 3. Implement the criterion class `NTXentLoss` which returns the loss also defined in section 2.1.
 4. Train and evaluate the model with `sbatch --job-name simclr_scratch ./scripts/sbatch_one.sh --mode=simclr_scratch` .
 
