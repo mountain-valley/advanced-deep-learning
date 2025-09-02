@@ -29,11 +29,8 @@ class SimCLRImageFolder(ImageFolder):
         return view1, view2
 
 def get_simclr_transform(size):
-    return T.Compose([
-        T.Resize(size), T.RandomResizedCrop(size=size, scale=(0.2, 1.0)),
-        T.RandomHorizontalFlip(p=0.5), T.RandomApply([T.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
-        T.RandomGrayscale(p=0.2), T.ToTensor(), T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+    # TODO: Implement data augmentation for SimCLR using torchvision transforms
+    pass
 
 def get_supervised_transform(size, is_train=True):
     if is_train:
@@ -78,9 +75,18 @@ class SimCLRModel(nn.Module):
         super().__init__()
         self.backbone = backbone
         embedding_dim = self.backbone.config.hidden_size
-        self.projection_head = nn.Sequential(nn.Linear(embedding_dim, embedding_dim), nn.ReLU(), nn.Linear(embedding_dim, projection_dim))
+        # TODO: Add the projection head
+
     def forward(self, x):
-        return self.projection_head(self.backbone(pixel_values=x).last_hidden_state[:, 0, :])
+        """
+        Args:
+            x (torch.Tensor): Input image tensor of shape [batch_size, 3, image_size, image_size]
+
+        Returns:
+            torch.Tensor: Output tensor after projection head of shape [batch_size, projection_dim]
+        """
+        # TODO: Implement the forward pass for SimCLR
+        return x
 
 class SupervisedModel(nn.Module):
     def __init__(self, backbone, num_classes):
@@ -96,21 +102,19 @@ class NTXentLoss(nn.Module):
         self.batch_size = batch_size
         self.temperature = temperature
         self.device = device
-        self.mask = self._get_correlated_mask().type(torch.bool)
-        self.criterion = nn.CrossEntropyLoss(reduction="sum")
-        self.similarity_f = nn.CosineSimilarity(dim=2)
-    def _get_correlated_mask(self):
-        diag = np.eye(2 * self.batch_size)
-        l1 = np.eye(2 * self.batch_size, k=-self.batch_size); l2 = np.eye(2 * self.batch_size, k=self.batch_size)
-        mask = torch.from_numpy((diag + l1 + l2)); return (1 - mask).to(self.device)
+        # TODO: Add any other variables needed
+
+
     def forward(self, z_i, z_j):
-        representations = torch.cat([z_j, z_i], dim=0)
-        sim_matrix = self.similarity_f(representations.unsqueeze(1), representations.unsqueeze(0))
-        pos = torch.cat([torch.diag(sim_matrix, self.batch_size), torch.diag(sim_matrix, -self.batch_size)]).view(2 * self.batch_size, 1)
-        neg = sim_matrix[self.mask].view(2 * self.batch_size, -1)
-        logits = torch.cat((pos, neg), dim=1) / self.temperature
-        labels = torch.zeros(2 * self.batch_size, device=self.device, dtype=torch.long)
-        return self.criterion(logits, labels) / (2 * self.batch_size)
+        """
+        Args:
+            z_i (torch.Tensor): First set of representations
+            z_j (torch.Tensor): Second set of representations
+        Returns:
+            torch.Tensor: Computed loss
+        """
+        # TODO: Implement the forward pass of NTXentLoss
+        pass
 
 # --- Training & Evaluation Functions ---
 def get_model_backbone(args, pretrained=False):

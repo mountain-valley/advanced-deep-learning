@@ -151,7 +151,7 @@ This lab will focus on implementing and replicating results from the SimCLR pape
     - [x]  `cifar_supervised_scratch` [reinitialized weights][trained end to end on cifar100]
 3. These modes are made up from a combination of reinitializing weights, training paradigm, and whether the model is first pretrained on imagenet with a linear classifier head trained on cifar100 after (with rest of the model being frozen) or the model is trained end to end on cifar100.
 4. You can run a quick test using CPU with: `CUDA_VISIBLE_DEVICES="" uv run src/main.py --training_mode cifar_supervised_scratch --run-name cpu_test` . ^C after a few steps. This is only a simple check to ensure we can load the model, cifar data, and train.
-5. You can submit a job with `sbatch --job-name cifar_supervised_scratch ./scripts/sbatch_one.sh --mode=cifar_supervised_scratch`. Ensure that this is working.
+5. You can submit a job with `sbatch --job-name cifar_supervised_scratch ./scripts/sbatch_one.sh --mode=cifar_supervised_scratch`. Ensure that this is working by running the script and check the logs are clear of errors.
     1. This script contains a lot of pieces, but the main parts are the shebang, sbatch arguments, activating the environment, and running the script with the correct arguments.
 6. You can submit all jobs with `./scripts/sbatch_all.sh`. Don’t do this yet.
     1. This submits a job for all modes. All the modes are not ready yet, but it can provide some detail as to submitting jobs.
@@ -165,24 +165,24 @@ This lab will focus on implementing and replicating results from the SimCLR pape
 
 # 3 Pretrained Model
 
-1. Implementing the function `evaluate_linear_head`.
-    1. First, extract features for the train and test splits of the CIFAR 100 dataset.
-    2. Training and evaluating a linear classifier model on these features.
-2. Train and evaluate the model with `sbatch --job-name pretrained ./scripts/sbatch_one.sh --mode=pretrained` .
+1. We have implemented the function `evaluate_linear_head`:
+    1. First, we extract features for the train and test splits of the CIFAR 100 dataset.
+    2. Then, we train and evaluate a linear classifier model on these features.
+2. To check if it's working, train and evaluate the model with `sbatch --job-name pretrained ./scripts/sbatch_one.sh --mode=pretrained` and ensure the logs are clear of errors. We can now use and evaluate a pretrained model.
 
 # 4 Supervised Learning
 
-1. We can now use and evaluate a pretrained model. Next, let’s pretrain our own model by implementing the class `SupervisedModel`  which will be used to first train a model on ImageNet, and then use it on CIFAR 100.
-    1. This step is quite simple: take in a backbone and add a linear classifier head. The classifier head will take in a vector for an image and output logits in the dimension of number of classes.
-    2. Please use the CLS token which you can find by reading this model doc: [https://huggingface.co/docs/transformers/main/en/model_doc/dinov3](https://huggingface.co/docs/transformers/main/en/model_doc/dinov3)
-2. Train and evaluate the model with `sbatch --job-name supervised_scratch ./scripts/sbatch_one.sh --mode=supervised_scratch` .
+1. Next, let’s pretrain our own model by using the class `SupervisedModel`  which will be used to first train a model on ImageNet, and then use it on CIFAR 100.
+    1. This class takes a backbone and adds a linear classifier head. The classifier head will take in a vector for an image and output logits in the dimension of number of classes.
+    2. It uses the CLS token which you can find by reading this model doc: [https://huggingface.co/docs/transformers/main/en/model_doc/dinov3](https://huggingface.co/docs/transformers/main/en/model_doc/dinov3)
+2. Train and evaluate the model with `sbatch --job-name supervised_scratch ./scripts/sbatch_one.sh --mode=supervised_scratch`.
 
-# 5 Unsupervised Learning
+# 5 Unsupervised Learning [Start Coding]
 
 1. Implement the model class: `SimCLRModel`
-    1. Instead of a classifier head, add a projection head as defined in section 2.1 of [https://arxiv.org/pdf/2002.05709](https://arxiv.org/pdf/2002.05709).
-2. Implement the dataset helper function `get_simclr_transform(size)`  which returns a random transformation.
-3. Implement the criterion class `NTXentLoss` which returns the loss also defined in section 2.1.
+    1. Instead of a classifier head, add a projection head as defined in section 2.1 of [https://arxiv.org/pdf/2002.05709](https://arxiv.org/pdf/2002.05709). You can run `uv run src/main_test.py` to test whether the shapes match.
+2. Implement the criterion class `NTXentLoss` which returns the loss also defined in section 2.1. You can run `uv run src/main_test.py` to test whether the loss is lower for similar vectors.
+3. Implement the dataset helper function `get_simclr_transform(size)`  which returns a random transformation using torch vision transforms. You can learn more about it here, but it's important to include the other augmentations mentioned in the paper. [https://docs.pytorch.org/vision/main/auto_examples/transforms/plot_transforms_getting_started.html#sphx-glr-auto-examples-transforms-plot-transforms-getting-started-py](https://docs.pytorch.org/vision/main/auto_examples/transforms/plot_transforms_getting_started.html#sphx-glr-auto-examples-transforms-plot-transforms-getting-started-py)
 4. Train and evaluate the model with `sbatch --job-name simclr_scratch ./scripts/sbatch_one.sh --mode=simclr_scratch` .
 
 # 6 Conclusion
