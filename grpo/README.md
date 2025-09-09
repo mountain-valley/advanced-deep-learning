@@ -46,8 +46,8 @@ At this point, you have PPO RLVR.
 ## 4 Environment and setup
 
 - Python 3.10+
+- Default model: "Qwen/Qwen2.5-3B".
 - Install dependencies (see project `requirements.txt`). Ensure CUDA-compatible PyTorch.
-- Obtain a Hugging Face token if required by the chosen models and set `HF_TOKEN`.
 - vLLM requires GPUs; confirm the GPU allocation policy on your cluster.
 
 ## 5 How to run
