@@ -1,4 +1,4 @@
-# CS 674 GRPO Lab (PPO-first → GRPO)
+# CS 674 GRPO Lab 
 
 ## 1 Overview
 
