@@ -67,23 +67,22 @@ deepspeed --num_gpus <N> RLVR_Goal_Directedness/grpo_lab.py --train
 - The generation worker runs inference via vLLM and uploads batches to the reference server.
 - The trainer fetches batches from the server and runs PPO updates across the remaining GPUs.
 
-## 6 Tips and expectations
 
-- Start with PPO (single rollout per prompt). Keep the loop simple and ensure the payload schema matches the reference server expectations.
-- Masking is critical: only average loss over completion tokens (ignore prompt tokens and padding).
-- When you extend to GRPO, only then add `GROUP_SIZE` and group normalization logic.
-- Debug with small models and short max_tokens first; scale up after the end-to-end path works.
+## 6 Deliverables
 
-## 7 Deliverables
-
-- Working implementation of Steps 1–4 (PPO RLVR): reward functions, inference loop, PPO loss.
-- Extension to Step 5 (GRPO): multiple rollouts per prompt and group reward normalization.
-- Short write-up and logs showing:
+- Turn in your working implementation of Steps 1–5, and logs showing:
   - A few sampled prompts and generated answers
   - That training has progressed until format adherence rate > 0.8 
   - Average reward increasing over steps; you should be able to produce plots like the following:
     
 ![Qwen2dot5-7B-res](https://github.com/user-attachments/assets/dcbf3956-e951-4183-9a58-7b932d5ba48d)
+
+## 7 Tips and expectations
+
+- Start with PPO (single rollout per prompt). Keep the loop simple and ensure the payload schema matches the reference server expectations.
+- Masking is critical: only average loss over completion tokens (ignore prompt tokens and padding).
+- When you extend to GRPO, only then add `GROUP_SIZE` and group normalization logic.
+- Debug with small models and short max_tokens first; scale up after the end-to-end path works.
 
 ## 8 Troubleshooting
 
