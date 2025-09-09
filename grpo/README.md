@@ -82,6 +82,7 @@ deepspeed --num_gpus <N> RLVR_Goal_Directedness/grpo_lab.py --train
   - A few sampled prompts and generated answers
   - Format adherence rate
   - PPO loss decreasing over steps; you should be able to produce plots like the following:
+    
 ![Qwen2dot5-7B-res](https://github.com/user-attachments/assets/dcbf3956-e951-4183-9a58-7b932d5ba48d)
 
 ## 8 Troubleshooting
