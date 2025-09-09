@@ -78,10 +78,10 @@ deepspeed --num_gpus <N> RLVR_Goal_Directedness/grpo_lab.py --train
 
 - Working implementation of Steps 1–4 (PPO RLVR): reward functions, inference loop, PPO loss.
 - Extension to Step 5 (GRPO): multiple rollouts per prompt and group reward normalization.
-- Short write-up or logs showing:
+- Short write-up and logs showing:
   - A few sampled prompts and generated answers
-  - Format adherence rate
-  - PPO loss decreasing over steps; you should be able to produce plots like the following:
+  - That training has progressed until format adherence rate > 0.8 
+  - Average reward increasing over steps; you should be able to produce plots like the following:
     
 ![Qwen2dot5-7B-res](https://github.com/user-attachments/assets/dcbf3956-e951-4183-9a58-7b932d5ba48d)
 
