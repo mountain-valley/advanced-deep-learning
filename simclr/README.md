@@ -111,8 +111,8 @@ This lab will focus on implementing and replicating results from the SimCLR pape
     4. Pretrain a model using an unlabeled dataset with contrastive learning like ImageNet (with no labels).
         1. Extract internal representations, train, and evaluate on CIFAR 100.
 4. We have provided a working example of end to end training on CIFAR 100 [a].
-5. Your first step will be to complete [b] by implementing the function `evaluate_linear_head`
-6. Your next step will be to complete [c] by implementing the class `SupervisedModel`.
+5. Your first step will be to run [b] by using the function `evaluate_linear_head`
+6. Your next step will be to run [c] by using the class `SupervisedModel`.
 7. You next step will be to complete [d] by implementing…
     1. the model class `SimCLRModel`
     2. the dataset helper function `get_simclr_transform(size)` 
