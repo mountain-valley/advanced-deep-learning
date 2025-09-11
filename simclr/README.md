@@ -103,22 +103,27 @@ This lab will focus on implementing and replicating results from the SimCLR pape
 1. The goal of this lab will be to reproduce the results of the SimCLR paper which is to show that unsupervised learning on an image task using contrastive learning is comparable to supervised learning.
 2. In this lab, we will use the new DinoV3 Small ViT model as our architecture. Feel free to learn more about DinoV3, ViTs, and ConvNexts. [https://arxiv.org/abs/2508.10104](https://arxiv.org/abs/2508.10104) [https://arxiv.org/abs/2010.11929](https://arxiv.org/abs/2010.11929) [https://arxiv.org/abs/2201.03545](https://arxiv.org/abs/2201.03545)
 3. Our goal is achieve the highest accuracy on cifar 100 which contains 100 classes. We have a few approaches:
+
     a. Train end to end on CIFAR 100 data and evaluate using the test set.
+
     b. Use an off the shelf pretrained model like DinoV3.
         1. Extract internal representation / features for the CIFAR100 dataset and train a linear classifier using those features and evaluate using the test set.
+
     c. Pretrain a model using a labeled dataset with supervised learning like ImageNet. 
         1. Extract internal representations, train, and evaluate on CIFAR 100.
+
     d. Pretrain a model using an unlabeled dataset with contrastive learning like ImageNet (with no labels).
         1. Extract internal representations, train, and evaluate on CIFAR 100.
-4. We have provided a working example of end to end training on CIFAR 100 [a].
-5. Your first step will be to run [b] by using the function `evaluate_linear_head` (no coding needed, just run a script to ensure things are working).
-6. Your next step will be to run [c] by using the class `SupervisedModel` (no coding needed).
-7. You next step will be to complete [d] by implementing… (start coding)
+
+5. We have provided a working example of end to end training on CIFAR 100 [a].
+6. Your first step will be to run [b] by using the function `evaluate_linear_head` (no coding needed, just run a script to ensure things are working).
+7. Your next step will be to run [c] by using the class `SupervisedModel` (no coding needed).
+8. You next step will be to complete [d] by implementing… (start coding)
     1. the model class `SimCLRModel`
     2. the dataset helper function `get_simclr_transform(size)` 
     3. the criterion class `NTXentLoss`
-8. In the end, you will have trained all the above models and obtained final accuracies.
-9. For your convenience, you really only need to make sure your environment and training is working, complete [d] by implementing the 3 parts, and run the script to submit all jobs at once (to avoid waiting for the other jobs finish before you start coding).
+9. In the end, you will have trained all the above models and obtained final accuracies.
+10. For your convenience, you really only need to make sure your environment and training is working, complete [d] by implementing the 3 parts, and run the script to submit all jobs at once (to avoid waiting for the other jobs finish before you start coding).
 
 ## 2.2 Clone the Repo
 
