@@ -104,15 +104,15 @@ This lab will focus on implementing and replicating results from the SimCLR pape
 2. In this lab, we will use the new DinoV3 Small ViT model as our architecture. Feel free to learn more about DinoV3, ViTs, and ConvNexts. [https://arxiv.org/abs/2508.10104](https://arxiv.org/abs/2508.10104) [https://arxiv.org/abs/2010.11929](https://arxiv.org/abs/2010.11929) [https://arxiv.org/abs/2201.03545](https://arxiv.org/abs/2201.03545)
 3. Our goal is achieve the highest accuracy on cifar 100 which contains 100 classes. We have a few approaches:
 
-    a. Train end to end on CIFAR 100 data and evaluate using the test set.
+    1. [a] Train end to end on CIFAR 100 data and evaluate using the test set.
 
-    b. Use an off the shelf pretrained model like DinoV3.
+    2. [b] Use an off the shelf pretrained model like DinoV3.
         1. Extract internal representation / features for the CIFAR100 dataset and train a linear classifier using those features and evaluate using the test set.
 
-    c. Pretrain a model using a labeled dataset with supervised learning like ImageNet. 
+    3. [c] Pretrain a model using a labeled dataset with supervised learning like ImageNet. 
         1. Extract internal representations, train, and evaluate on CIFAR 100.
 
-    d. Pretrain a model using an unlabeled dataset with contrastive learning like ImageNet (with no labels).
+    4. [d] Pretrain a model using an unlabeled dataset with contrastive learning like ImageNet (with no labels).
         1. Extract internal representations, train, and evaluate on CIFAR 100.
 
 5. We have provided a working example of end to end training on CIFAR 100 [a].
