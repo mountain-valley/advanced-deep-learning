@@ -103,21 +103,22 @@ This lab will focus on implementing and replicating results from the SimCLR pape
 1. The goal of this lab will be to reproduce the results of the SimCLR paper which is to show that unsupervised learning on an image task using contrastive learning is comparable to supervised learning.
 2. In this lab, we will use the new DinoV3 Small ViT model as our architecture. Feel free to learn more about DinoV3, ViTs, and ConvNexts. [https://arxiv.org/abs/2508.10104](https://arxiv.org/abs/2508.10104) [https://arxiv.org/abs/2010.11929](https://arxiv.org/abs/2010.11929) [https://arxiv.org/abs/2201.03545](https://arxiv.org/abs/2201.03545)
 3. Our goal is achieve the highest accuracy on cifar 100 which contains 100 classes. We have a few approaches:
-    1. Train end to end on CIFAR 100 data and evaluate using the test set.
-    2. Use an off the shelf pretrained model like DinoV3.
+    a. Train end to end on CIFAR 100 data and evaluate using the test set.
+    b. Use an off the shelf pretrained model like DinoV3.
         1. Extract internal representation / features for the CIFAR100 dataset and train a linear classifier using those features and evaluate using the test set.
-    3. Pretrain a model using a labeled dataset with supervised learning like ImageNet. 
+    c. Pretrain a model using a labeled dataset with supervised learning like ImageNet. 
         1. Extract internal representations, train, and evaluate on CIFAR 100.
-    4. Pretrain a model using an unlabeled dataset with contrastive learning like ImageNet (with no labels).
+    d. Pretrain a model using an unlabeled dataset with contrastive learning like ImageNet (with no labels).
         1. Extract internal representations, train, and evaluate on CIFAR 100.
 4. We have provided a working example of end to end training on CIFAR 100 [a].
-5. Your first step will be to run [b] by using the function `evaluate_linear_head`
-6. Your next step will be to run [c] by using the class `SupervisedModel`.
-7. You next step will be to complete [d] by implementing…
+5. Your first step will be to run [b] by using the function `evaluate_linear_head` (no coding needed, just run a script to ensure things are working).
+6. Your next step will be to run [c] by using the class `SupervisedModel` (no coding needed).
+7. You next step will be to complete [d] by implementing… (start coding)
     1. the model class `SimCLRModel`
     2. the dataset helper function `get_simclr_transform(size)` 
     3. the criterion class `NTXentLoss`
 8. In the end, you will have trained all the above models and obtained final accuracies.
+9. For your convenience, you really only need to make sure your environment and training is working, complete [d] by implementing the 3 parts, and run the script to submit all jobs at once (to avoid waiting for the other jobs finish before you start coding).
 
 ## 2.2 Clone the Repo
 
@@ -140,17 +141,17 @@ This lab will focus on implementing and replicating results from the SimCLR pape
 ## 2.4 Submitting Jobs
 
 1. Once the model, data, and environment are downloaded, we are ready to submit a job.
-2. `src/main.py` is our entry point and requires a `--training_mode` and `--run-name`. Only cifar end to end training is completed. The rest of the steps will require work on your part.
-    - [ ]  `pretrained` [linear classifier post training]
-    - [ ]  `scratch` [reinitialized weights][linear classifier post training]
+2. `src/main.py` is our entry point and requires a `--training_mode` and `--run-name`. Most of the steps are already completed. The simclr will require work on your part. Also, scratch just means we reinitialize weights before training.
+    - [x]  `pretrained` [linear classifier post training]
+    - [x]  `scratch` [reinitialized weights][linear classifier post training]
     - [ ]  `simclr_scratch` [reinitialized weights][simclr on imagenet][linear classifier post training]
-    - [ ]  `supervised_scratch` [reinitialized weights][supervised on imagenet][linear classifier post training]
+    - [x]  `supervised_scratch` [reinitialized weights][supervised on imagenet][linear classifier post training]
     - [ ]  `simclr_pretrained` [simclr on imagenet][linear classifier post training]
-    - [ ]  `supervised_pretrained` [supervised on imagenet][linear classifier post training]
+    - [x]  `supervised_pretrained` [supervised on imagenet][linear classifier post training]
     - [x]  `cifar_supervised_pretrained` [trained end to end on cifar100]
     - [x]  `cifar_supervised_scratch` [reinitialized weights][trained end to end on cifar100]
 3. These modes are made up from a combination of reinitializing weights, training paradigm, and whether the model is first pretrained on imagenet with a linear classifier head trained on cifar100 after (with rest of the model being frozen) or the model is trained end to end on cifar100.
-4. You can run a quick test using CPU with: `CUDA_VISIBLE_DEVICES="" uv run src/main.py --training_mode cifar_supervised_scratch --run-name cpu_test` . ^C after a few steps. This is only a simple check to ensure we can load the model, cifar data, and train.
+4. You can run a quick test using CPU with: `CUDA_VISIBLE_DEVICES="" uv run src/main.py --training_mode cifar_supervised_scratch --run-name cpu_test` . ^C after a few steps. This is only a simple check to ensure we can load the model, cifar data, and train. CUDA_VISIBLE_DEVICES="" ensures we are running on CPU. CUDA_VISIBLE_DEVICES="0,1,2,3" is an example of exposing GPUs 0-3. The GPU on the login node will not work.
 5. You can submit a job with `sbatch --job-name cifar_supervised_scratch ./scripts/sbatch_one.sh --mode=cifar_supervised_scratch`. Ensure that this is working by running the script and check the logs are clear of errors.
     1. This script contains a lot of pieces, but the main parts are the shebang, sbatch arguments, activating the environment, and running the script with the correct arguments.
 6. You can submit all jobs with `./scripts/sbatch_all.sh`. Don’t do this yet.
