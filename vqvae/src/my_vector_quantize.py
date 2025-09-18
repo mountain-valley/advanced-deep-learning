@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class EMAVectorQuantizer(nn.Module):
+class MyVectorQuantizer(nn.Module):
     """
     A simplified custom Vector Quantizer (VQ) layer with EMA updates for stable training.
     

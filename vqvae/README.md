@@ -1,11 +1,10 @@
 # VQVAE Project Instructions
 
-This project implements and compares Variational Autoencoder (VAE), Vector Quantized VAE (VQVAE), Custom VQVAE, and Finite Scalar Quantization (FSQ) models on the STL10 dataset. Follow the steps below to run the experiments sequentially and generate the required outputs.
+This project implements and compares Variational Autoencoder (VAE), Vector Quantized VAE (VQVAE), Custom VQVAE, and Finite Scalar Quantization (FSQ) models on the STL10 dataset. Please note that this lab is designed to teach about VAEs, VQ-VAEs, and other quantization techniques. It may be slightly different or use different techniques than the original VQ-VAE paper due to stability and simplicity considerations.
 
 ## Prerequisites
 - This lab comes with just the necessary code structure and some parts of the implementation. You will need to fill in the missing parts as indicated in the code files.
-- To get started navigate to the project directory and run `uv init` to set up the environment.
-- Use `uv run src/main.py --data` on the login node initially just to download the dataset.
+- To get started navigate to the project directory and run `uv run src/main.py --data` on the login node initially just to download the dataset and modules.
 - You are welcome to complete this lab wherever you like (e.g., your local machine, Google Colab, or the ORC cluster).
 - To run on the ORC cluster, you can submit jobs by running: `sbatch submit.sh`. Make sure to adjust the script for the different experiments if necessary.
 
