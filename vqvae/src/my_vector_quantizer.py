@@ -114,13 +114,14 @@ class MyVectorQuantizer(nn.Module):
             one_hot_encodings = F.one_hot(nearest_indices_flat, self.codebook_size).float()  # (B*N, codebook_size)
             cluster_sizes = one_hot_encodings.sum(0)  # (codebook_size,)
             weighted_sum_latents = torch.matmul(one_hot_encodings.t(), flattened_latents)  # (codebook_size, D)
-            
+
             # Update EMA buffers (restore the missing update for ema_cluster_size)
             def ema_update(ema, value, decay):
                 return ema * decay + value * (1 - decay)
 
-            self.ema_cluster_sizes.data = ema_update(self.ema_cluster_sizes.data, cluster_sizes, self.decay)
-            self.ema_codebook.data = ema_update(self.ema_codebook.data, weighted_sum_latents, self.decay)
+            # Prefer in-place to preserve optimizer state and avoid extra allocs
+            self.ema_cluster_sizes.data.mul_(self.decay).add_(cluster_sizes, alpha=1 - self.decay)
+            self.ema_codebook.data.mul_(self.decay).add_(weighted_sum_latents, alpha=1 - self.decay)
 
             # Normalize and copy to embedding (now use EMA cluster size for smoothing)
             def normalize_with_ema(ema_codebook, ema_cluster_sizes, epsilon):
@@ -136,8 +137,9 @@ class MyVectorQuantizer(nn.Module):
                 # TODO: Implement normalization as described in the instructions. [One Line]
                 return ema_codebook / (ema_cluster_sizes.unsqueeze(1) + epsilon)
 
-            self.embedding.weight.data = normalize_with_ema(self.ema_codebook, self.ema_cluster_sizes, self.epsilon)
-                    
+            # In-place copy to keep parameter storage stable
+            self.embedding.weight.data.copy_(normalize_with_ema(self.ema_codebook, self.ema_cluster_sizes, self.epsilon))
+
             self._revive_dead_codes(flattened_latents)
 
         # Step 5: Compute commitment loss (encourages encoder to match quantized vectors)
