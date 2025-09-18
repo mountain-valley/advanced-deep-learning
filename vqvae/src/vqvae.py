@@ -14,7 +14,7 @@ class VQVAE(nn.Module):
         self.enc = Encoder(dim)
         self.dec = Decoder(dim)
         if custom:
-            self.vq = MyVectorQuantize(dim=dim, codebook_size=codebook_size, decay=0.99, commitment_weight=0.25)
+            self.vq = MyVectorQuantizer(dim=dim, codebook_size=codebook_size, decay=0.99, commitment_weight=0.25)
         else:
             self.vq = VectorQuantize(dim=dim, codebook_size=codebook_size, decay=0.99, commitment_weight=0.25)
 

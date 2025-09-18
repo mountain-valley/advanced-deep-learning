@@ -28,7 +28,7 @@ This trains the VQVAE with a codebook size of 512 and generates the outputs whic
 
 ### 3. Run Custom VQVAE Experiment
 1. Implement the forward pass in `src/my_vqvae.py` by following the instructions in the file. This will involve completing FOUR TODO sections: `calculate_distances`, `find_quantized_latents`, `normalize_with_ema`, and `apply_ste`.
-2. Run the custom VQVAE implementation (using `MyVectorQuantize`).
+2. Run the custom VQVAE implementation (using `MyVectorQuantizer`).
 ```bash
 uv run src/main.py --exp myvqvae
 ```
