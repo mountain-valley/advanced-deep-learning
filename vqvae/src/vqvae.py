@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from vector_quantize_pytorch import VectorQuantize
 from src.components import Encoder, Decoder
-from src.my_vector_quantize import MyVectorQuantize
+from src.my_vector_quantizer import MyVectorQuantizer
 
 class VQVAE(nn.Module):
     """

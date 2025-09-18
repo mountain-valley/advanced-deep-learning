@@ -19,7 +19,7 @@ from src.components import Encoder, Decoder, ResBlock
 from src.fsq import FSQ
 from src.vae import VAE
 from src.vqvae import VQVAE
-from src.my_vector_quantize import MyVectorQuantize
+from src.my_vector_quantizer import MyVectorQuantizer
 
 # -------------------
 # Command Line Arguments
