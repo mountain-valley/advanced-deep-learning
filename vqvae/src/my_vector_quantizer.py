@@ -31,17 +31,17 @@ class MyVectorQuantizer(nn.Module):
         self.embedding = nn.Embedding(self.codebook_size, self.dim)
         
         # EMA buffers: Track cluster sizes and smoothed embeddings for stable updates
-        self.register_buffer('ema_cluster_sizes', torch.zeros(codebook_size))
-        self.register_buffer('ema_codebook', self.embedding.weight.data.clone())
-        self.register_buffer('is_initialized', torch.tensor(False, dtype=torch.bool))
+        self.register_buffer('ema_cluster_size', torch.zeros(codebook_size))
+        self.register_buffer('ema_embeddings', self.embedding.weight.data.clone())
+        self.register_buffer('initialized', torch.tensor(False, dtype=torch.bool))
     
     @torch.no_grad()
-    def _revive_dead_codes(self, flattened_latents):
+    def _reset_dead_codes(self, flattened_latents):
         """
-        Optional: Revive "dead" codes (those used below the threshold) by replacing them
+        Replaces "dead" codes (those used below the threshold) by replacing them
         with random samples from the current batch. This prevents codebook collapse.
         """
-        dead_mask = self.ema_cluster_sizes < self.threshold_ema_dead_code
+        dead_mask = self.ema_cluster_size < self.threshold_ema_dead_code
         num_dead = dead_mask.sum().item()
         
         if num_dead > 0:
@@ -51,9 +51,9 @@ class MyVectorQuantizer(nn.Module):
             
             # Update codebook and EMA buffers
             self.embedding.weight.data[dead_mask] = replacements
-            self.ema_codebook.data[dead_mask] = replacements
-            self.ema_cluster_sizes[dead_mask] = 1.0
-    
+            self.ema_embeddings.data[dead_mask] = replacements
+            self.ema_cluster_size[dead_mask] = 1.0
+
     def forward(self, encoded_latents):
         """
         Forward pass: Quantize input vectors and compute losses.
@@ -82,13 +82,13 @@ class MyVectorQuantizer(nn.Module):
             # TODO: Implement distance calculation as described in the instructions. 
             z_sq = torch.sum(z.pow(2), dim=1, keepdim=True)  # (B*N, 1)
             e_sq = torch.sum(e.pow(2), dim=1)  # (codebook_size,)
-            ze2 = 2 * torch.matmul(z, e.t())  # (B*N, codebook_size)
-            distances = z_sq - ze2 + e_sq  # (B*N, codebook_size)
+            z_dot_e = torch.matmul(z, e.t())  # (B*N, codebook_size)
+            distances = z_sq - 2 * z_dot_e + e_sq  # (B*N, codebook_size)
             return distances
         
         z = flattened_latents
         e = self.embedding.weight
-        distances_to_codebook = calculate_distances(z, e)
+        distances = calculate_distances(z, e)
 
         # Step 3: Find nearest codebook vectors
         def find_quantized_latents(distances_to_codebook):
@@ -105,25 +105,24 @@ class MyVectorQuantizer(nn.Module):
             nearest_indices_flat = torch.argmin(distances_to_codebook, dim=-1)  # (B*N,)
             quantized_latents_flat = self.embedding(nearest_indices_flat)  # (B*N, D)
             return quantized_latents_flat, nearest_indices_flat
+
+        quantized_latents_flat, indices_flat = find_quantized_latents(distances)
+        quantized_latents = quantized_latents_flat.view(B, N, D)
         
-        quantized_latents_flat, nearest_indices_flat = find_quantized_latents(distances_to_codebook)
 
         # Step 4: Update codebook via EMA (only during training)
         if self.training:
             # One-hot encode indices for aggregation
-            one_hot_encodings = F.one_hot(nearest_indices_flat, self.codebook_size).float()  # (B*N, codebook_size)
-            cluster_sizes = one_hot_encodings.sum(0)  # (codebook_size,)
-            weighted_sum_latents = torch.matmul(one_hot_encodings.t(), flattened_latents)  # (codebook_size, D)
-
+            encodings = F.one_hot(indices_flat, self.codebook_size).float()  # (B*N, codebook_size)
+            cluster_counts = encodings.sum(0)  # (codebook_size,)
+            weighted_sum_latents = torch.matmul(encodings.t(), flattened_latents)  # (codebook_size, D)
+            
             # Update EMA buffers (restore the missing update for ema_cluster_size)
-            def ema_update(ema, value, decay):
-                return ema * decay + value * (1 - decay)
-
-            # Prefer in-place to preserve optimizer state and avoid extra allocs
-            self.ema_cluster_sizes.data.mul_(self.decay).add_(cluster_sizes, alpha=1 - self.decay)
-            self.ema_codebook.data.mul_(self.decay).add_(weighted_sum_latents, alpha=1 - self.decay)
-
+            self.ema_cluster_size.data.mul_(self.decay).add_(cluster_counts, alpha=1 - self.decay)
+            self.ema_embeddings.data.mul_(self.decay).add_(weighted_sum_latents, alpha=1 - self.decay)
+            
             # Normalize and copy to embedding (now use EMA cluster size for smoothing)
+            # normalized_embeds = self.ema_embeddings / (self.ema_cluster_size.unsqueeze(1) + self.epsilon)
             def normalize_with_ema(ema_codebook, ema_cluster_sizes, epsilon):
                 """
                 Normalize the EMA codebook using the EMA cluster sizes to get updated embeddings.
@@ -136,14 +135,11 @@ class MyVectorQuantizer(nn.Module):
                 """
                 # TODO: Implement normalization as described in the instructions. [One Line]
                 return ema_codebook / (ema_cluster_sizes.unsqueeze(1) + epsilon)
-
-            # In-place copy to keep parameter storage stable
-            self.embedding.weight.data.copy_(normalize_with_ema(self.ema_codebook, self.ema_cluster_sizes, self.epsilon))
-
-            self._revive_dead_codes(flattened_latents)
+            normalized_embeds = normalize_with_ema(self.ema_embeddings, self.ema_cluster_size, self.epsilon)
+            self.embedding.weight.data.copy_(normalized_embeds)
+            self._reset_dead_codes(flattened_latents)
 
         # Step 5: Compute commitment loss (encourages encoder to match quantized vectors)
-        quantized_latents = quantized_latents_flat.view(B, N, D)
         commitment_loss = self.commitment_weight * F.mse_loss(encoded_latents, quantized_latents.detach())
         
         # Step 6: Apply Straight-Through Estimator (STE) for gradient flow
@@ -158,10 +154,7 @@ class MyVectorQuantizer(nn.Module):
                 Tensor: Quantized latents with STE applied, shape (B, N, D).
             """
             # TODO: Implement STE as described in the instructions. [Hint: Use detach()] [One Line]
-            return quantized_latents + (encoded_latents - quantized_latents).detach()
-        
-        
+            return encoded_latents + (quantized_latents - encoded_latents).detach()
         quantized_latents = apply_ste(quantized_latents, encoded_latents)
-        quantized_indices = nearest_indices_flat.view(B, N)
-        
+        quantized_indices = indices_flat.view(B, N)
         return quantized_latents, quantized_indices, commitment_loss

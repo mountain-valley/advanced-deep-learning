@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #SBATCH --job-name=run_main_py    # A descriptive name for your job
-#SBATCH --output=slurm-%j.out   # File to capture standard output
-#SBATCH --error=slurm-%j.err    # File to capture standard error
+#SBATCH --output=slurm-%j.out   # File to capture both standard output and error
+#SBATCH --error=slurm-%j.out    # Redirect standard error to the same file as output
 #SBATCH --qos=dw87              # The quality of service queue
 #SBATCH --time=00:30:00         # 30 minutes of wall-clock time
 #SBATCH --gpus=1                # Request 1 GPU

@@ -56,7 +56,7 @@ if args.data:
 # -------------------
 # Training Utilities
 # -------------------
-epochs = 12
+epochs = 8
 lr = 3e-4
 
 def train_epoch(model, loader, opt, epoch, name, total_epochs, pbar):
