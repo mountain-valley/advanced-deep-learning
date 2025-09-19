@@ -44,13 +44,7 @@ class FSQ(nn.Module):
             4. Clamp the quantized values to ensure they remain within [-1, 1].
         """
         # TODO: Implement the quantization process as described in the instructions.
-        ###################################
-        z = torch.tanh(z)
-        s = self.levels / 2.0
-        z_q = self.ste_round(s * z) / s
-        z_q = z_q.clamp(-1, 1)
-        ###################################
-        return z_q
+        pass
 
     def forward(self, x):
         """
@@ -69,10 +63,6 @@ class FSQ(nn.Module):
         """
         # TODO: Implement the forward pass as described in the instructions.
         ###################################
-        z = self.enc(x)  # (B, dim, 24, 24)
-        z_q = self.quantize(z) # (B, dim, 24, 24)
-        x_hat = self.dec(z_q) # (B, 3, 96, 96)
-        reconstruction_loss = F.l1_loss(x_hat, x, reduction='mean')
-        commitment_loss = 0.25 * F.mse_loss(torch.tanh(z), z_q.detach())
+        pass
         ###################################
-        return x_hat, reconstruction_loss + commitment_loss, (24*24, self.levels, None)
+        # return x_hat, reconstruction_loss + commitment_loss, (24*24, self.levels, None)

@@ -36,14 +36,7 @@ class VQVAE(nn.Module):
         """
         # TODO: Implement the forward pass as described in the instructions.
         ###################################
-        z_e = self.enc(x)  # Shape: (B, dim, H, W)
-        B, C, H, W = z_e.shape
-        z_e_flat = z_e.permute(0, 2, 3, 1).reshape(B, H*W, C) # Shape: (B, N, D)
-        
-        z_q, indices, commit_loss = self.vq(z_e_flat)
-        z_q = z_q.view(B, H, W, C).permute(0, 3, 1, 2) # Shape: (B, dim, H, W)
-        x_hat = self.dec(z_q) # Shape: (B, 3, H, W)
-        reconstruction_loss = F.l1_loss(x_hat, x, reduction='mean')
+        pass
         
         ###################################
-        return x_hat, reconstruction_loss + commit_loss, (H*W, self.vq.codebook_size, indices)
+        # return x_hat, reconstruction_loss + commit_loss, (H*W, self.vq.codebook_size, indices)

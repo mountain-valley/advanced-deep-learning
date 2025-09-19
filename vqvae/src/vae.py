@@ -65,14 +65,7 @@ class VAE(nn.Module):
                 logvar (Tensor): Log-variance of the latent distribution, shape (B, latent_dim).
             """
             # TODO: Implement steps 1-5 as described in the instructions.
-            x = self.enc(x)  # Shape: (B, dim, H, W)
-            mu = self.linear_mu(x.flatten(1)) # Shape: (B, latent_dim)
-            logvar = self.linear_logvar(x.flatten(1)) # Shape: (B, latent_dim)
-            std = torch.exp(0.5 * logvar) # Shape: (B, latent_dim)
-            latent_sample = mu + std * torch.randn_like(std) # Shape: (B, latent_dim)
-            x = self.from_latent(latent_sample).view(x.shape)  # Reshape to (B, dim, H, W)
-            x = self.dec(x) # Shape: (B, 3, H, W)
-            return x, mu, logvar
+            pass
 
         # Step 6: Compute losses
         x, mu, logvar = inner_forward(x)
