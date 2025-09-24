@@ -12,6 +12,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as T
+import torchvision.transforms.v2 as v2
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.datasets import ImageFolder
@@ -28,9 +30,19 @@ class SimCLRImageFolder(ImageFolder):
         view2 = self.transform(sample)
         return view1, view2
 
+
 def get_simclr_transform(size):
-    # TODO: Implement data augmentation for SimCLR using torchvision transforms
-    pass
+    return v2.Compose([
+        v2.ToImage(),
+        v2.RandomResizedCrop(size=size, antialias=True),
+        v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+        v2.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 2.0)),
+        # v2.RandomHorizontalFlip(p=0.5),
+        # v2.RandomRotation(degrees=90),
+        # v2.RandomGrayscale(p=0.2),
+        # v2.ToDtype(torch.float32, scale=True),
+        # v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
 
 def get_supervised_transform(size, is_train=True):
     if is_train:
@@ -75,7 +87,12 @@ class SimCLRModel(nn.Module):
         super().__init__()
         self.backbone = backbone
         embedding_dim = self.backbone.config.hidden_size
-        # TODO: Add the projection head
+        self.expansion_ratio = 4
+        self.projection_head = nn.Sequential(
+            nn.Linear(embedding_dim, embedding_dim * self.expansion_ratio), 
+            nn.ReLU(),
+            nn.Linear(embedding_dim * self.expansion_ratio, projection_dim)
+        )
 
     def forward(self, x):
         """
@@ -85,8 +102,8 @@ class SimCLRModel(nn.Module):
         Returns:
             torch.Tensor: Output tensor after projection head of shape [batch_size, projection_dim]
         """
-        # TODO: Implement the forward pass for SimCLR
-        return x
+        h = self.backbone(pixel_values=x).last_hidden_state[:, 0, :]
+        return self.projection_head(h)
 
 class SupervisedModel(nn.Module):
     def __init__(self, backbone, num_classes):
@@ -103,6 +120,8 @@ class NTXentLoss(nn.Module):
         self.temperature = temperature
         self.device = device
         # TODO: Add any other variables needed
+        self.cosine_sim = nn.CosineSimilarity(dim=1, eps=1e-8)
+        self.eps = 1e-8
 
 
     def forward(self, z_i, z_j):
@@ -114,7 +133,26 @@ class NTXentLoss(nn.Module):
             torch.Tensor: Computed loss
         """
         # TODO: Implement the forward pass of NTXentLoss
-        pass
+        z_i = F.normalize(z_i, dim=1)
+        z_j = F.normalize(z_j, dim=1)
+        N = z_i.shape[0]
+
+        z = torch.cat([z_i, z_j], dim=0) 
+        sim_matrix = torch.exp(torch.matmul(z, z.T) / self.temperature)
+
+        mask = (~torch.eye(2*N, dtype=torch.bool, device=self.device)).float()
+        masked_sim_matrix = sim_matrix * mask
+        denominator = masked_sim_matrix.sum(dim=1)
+
+        idx = torch.arange(N, device=self.device)
+        sim_1 = sim_matrix[idx, idx+N]
+        sim_2 = sim_matrix[idx+N, idx]
+        numerator = torch.cat([sim_1, sim_2], dim=0)
+
+        loss = -torch.log(numerator / denominator + self.eps)
+        L = loss.mean()
+
+        return L
 
 # --- Training & Evaluation Functions ---
 def get_model_backbone(args, pretrained=False):
