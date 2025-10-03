@@ -117,6 +117,19 @@ def GRPO_step(batch, pad_token_id):
     # 10. Return final loss 
 
     # TODO: Implement GRPO loss computation
+    # 1. Compute per-token log probabilities of the model
+    per_token_logps = get_per_token_logps(logits, input_ids)
+    # 2. Slice to keep only completion tokens (after prompt)
+
+    # 3. Move reference log probabilities to the same device as per_token_logps
+    # 4. Compute per-token KL divergence approximation for regularization
+    # 5. Create mask for completion tokens (not padding)
+    # 6. Compute importance sampling ratio
+    # 7. Clip ratio for PPO-style loss
+    # 8. Compute per-token GRPO loss
+    # 9. Average loss over completion tokens and batch
+    # 10. Return final loss 
+    
     pass
 
 
@@ -125,34 +138,41 @@ def gen_worker(Q, physics_device):
     torch.cuda.set_device(0)
     print(f"Generation worker process uses GPU {physics_device}")
     from vllm import LLM, SamplingParams
-    vllm_gen = LLM(model=model_path, gpu_memory_utilization=0.3, max_model_len=4096, dtype="float16")
-    vllm_tokenizer = vllm_gen.get_tokenizer()
+    vllm_gen = LLM(model=model_path, gpu_memory_utilization=0.3, max_model_len=4096, dtype="float16") # the LLM model, using vllm, a fast inference library
+    vllm_tokenizer = vllm_gen.get_tokenizer() # the tokenizer, used to tokenize the prompt and the generated answer
     ref_server_ver = 'tensor'  # don't worry, it will auto switch based on the first upload
 
+    # objects that wrap/store the generation parameters, will be passed to vllm_gen.generate() along with the prompts to generate the LLM outputs (run inference)
     sampling_params = SamplingParams(n=num_pre_Q, temperature=0.9, max_tokens=700)
     gen_logps_sp = SamplingParams(temperature=0, top_p=1, max_tokens=1, prompt_logprobs=1)
 
     from datasets import load_dataset
     dataset = load_dataset("openai/gsm8k", "main", split="train")
-    QAs = [{'Q':x, 'A':y.split('####')[-1].strip()} for x,y in zip(dataset['question'], dataset['answer'])]
+    QAs = [{'Q':x, 'A':y.split('####')[-1].strip()} for x,y in zip(dataset['question'], dataset['answer'])] # list of dicts with keys 'Q' (question) and 'A' (ground truth answer)
     
     system_prompt = """You are a helpful assistant. A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The Assistant first thinks about the reasoning process in the mind and then provides the user with the answer.\
     The reasoning process and answer are enclosed within <think> </think> and<answer> </answer> tags, respectively, i.e., <think> reasoning process here </think><answer> answer here </answer>."""
+    
+
     def gen_answers(prompts):
         tip_text = []
         for x in prompts:
             tip_text.append(vllm_tokenizer.apply_chat_template([
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": x}], tokenize=False, add_generation_prompt=True))
+        # generate the LLM outputs (run inference)
         voutputs = vllm_gen.generate(tip_text, sampling_params, use_tqdm=False)
         answers = [];  ans_token_ids = []
+        # unpack the LLM outputs
         for v in voutputs:
             for z in v.outputs: 
                 answers.append(z.text)
                 ans_token_ids.append(z.token_ids)
         return answers, ans_token_ids
 
+
     from math_verify import parse, verify, ExprExtractionConfig
+    import re
     def reward_correct(item, answer):
         """Extract the final numerical answer from the model's output and compare it to the ground truth answer.
         
@@ -167,7 +187,20 @@ def gen_worker(Q, physics_device):
             - Returns -1 if no number is found in the answer
         """
         # TODO: Implement reward_correct function
-        pass
+        answer_phrase = re.findall(r"<answer>\s*(.*?)\s*</answer>", answer, flags=re.DOTALL)
+        number_at_end_re = r'([+-]?(?:\d+(?:\.\d+)?|\d+\s*/\s*\d+))\s*$'
+        number_at_end = re.search(number_at_end, answer_phrase)
+
+        model_answer = parse(number_at_end.group(0))
+
+        gt_answer = parse(item['A'])
+        is_correct = verify(gt_answer, model_answer)
+        
+        if is_correct:
+            return 1
+        else:
+            return -1
+        
 
     def reward_format(item, answer):
         """Check if the model's answer follows the required format with <think> and <answer> tags.
@@ -183,9 +216,23 @@ def gen_worker(Q, physics_device):
             - Returns -1 if the format is incorrect
         """
         # TODO: Implement reward_format function
+        answer_phrase = re.findall(r"<answer>\s*(.*?)\s*</answer>", answer, flags=re.DOTALL)
         pass
+        
 
     def gen_samples(inputs):
+        """
+        Generate samples from the model.
+        Uses the method gen_answers to generate the LLM outputs (run inference), then computes the rewards for each generated answer.
+
+        Args:
+            inputs: list of dicts with keys 'Q' (question) and 'A' (ground truth answer)
+        Returns:
+            prompts_text: list of prompt text
+            rewards: list of rewards
+            answers: list of generated answers
+            ans_token_ids: list of token IDs of the generated answers
+        """
         prompts = [x["Q"] for x in inputs]
         answers, ans_token_ids = gen_answers(prompts)
         rewards = []
@@ -219,41 +266,51 @@ def gen_worker(Q, physics_device):
         if it % 5 == 0: print('answers:', answers[0])
 
         for i, pp in enumerate(prompt_inputs):
+            # Tokenize the prompt (no special tokens) and record its length for later slicing
             prompt_ids = vllm_tokenizer(pp, return_tensors="pt", add_special_tokens=False)["input_ids"]
             plen = prompt_ids.shape[1]
+            # Take the contiguous block of answers/ids/rewards corresponding to this prompt
             curr_answers = answers[i*num_pre_Q:(i+1)*num_pre_Q]
             curr_ans_ids = ans_token_ids[i*num_pre_Q:(i+1)*num_pre_Q]
             curr_rewards = rewards[i*num_pre_Q:(i+1)*num_pre_Q]
+            # Skip groups with (near) zero reward variance; no useful learning signal
             if curr_rewards.max() - curr_rewards.min() < 1e-4: continue
 
+            # Prefer compact binary "tensor" upload; fall back to "string" JSON if server requests
             if ref_server_ver == 'tensor':
-                # Preserve unnormalized rewards for logging/analytics
+                # Preserve raw/unnormalized rewards for logging/analytics alongside normalized values
                 curr_rewards_unnorm = curr_rewards.clone()
-                # Compute format-only accuracy for each generated answer in this group
-                # 1 if matches required <think>...</think><answer>...</answer> format, else 0
+                # Compute a simple format-only accuracy: 1 if matches required tags, else 0
+                    # Compute format-only accuracy for each generated answer in this group
+                    # 1 if matches required <think>...</think><answer>...</answer> format, else 0                
                 fmt_flags = []
                 for a in curr_answers:
                     fmt_flags.append(1 if reward_format(None, a) > 0 else 0)
-                # Normalize rewards for training stability
+                # Normalize rewards (zero-mean, unit-scale) for training stability; eps avoids div-by-zero
                 curr_rewards = (curr_rewards - curr_rewards.mean()) / (curr_rewards.std() + 1e-4)
+                # Mini-batch the per-prompt answers to control memory
                 for ii in range(0, num_pre_Q, train_batch_size):
                     sub_rewards = curr_rewards[ii:ii+train_batch_size]
                     sub_rewards_unnorm = curr_rewards_unnorm[ii:ii+train_batch_size]
                     sub_ans_ids = curr_ans_ids[ii:ii+train_batch_size]
                     sub_fmt_flags = fmt_flags[ii:ii+train_batch_size]
+                    # Pad variable-length answer token IDs to a uniform length with the tokenizer pad token
                     tensor_list = [torch.tensor(lst) for lst in sub_ans_ids]
                     output_ids = pad_sequence(tensor_list, batch_first=True, padding_value=vllm_tokenizer.pad_token_id) 
+                    # Repeat the prompt to match the sub-batch and concatenate: [prompt | answer]
                     Qrep = prompt_ids.repeat(1, output_ids.shape[0]).view(-1, plen)
                     merged_ids = torch.cat([Qrep, output_ids], dim=1)
+                    # Build payload header (JSON) plus binary tensors
                     # Include unnormalized rewards and format accuracy in JSON header for training-side logging
                     data = [json.dumps({
-                                "plen": plen,
+                                "plen": plen,  # number of prompt tokens (used to slice off prompt logprobs)
                                 "unnormalized_rewards": sub_rewards_unnorm.tolist(),
                                 "format_accuracy": float(np.mean(sub_fmt_flags)) if len(sub_fmt_flags) > 0 else None
                             }).encode(),
                             tensor_to_bytes(merged_ids),
                             tensor_to_bytes(sub_rewards)]       
 
+                    # Optionally compute per-token generation logprobs for the answers (exclude prompt via plen)
                     if compute_gen_logps:
                         zz = vllm_gen.generate(
                             TokensPrompt(prompt_token_ids=merged_ids[0].tolist()),
@@ -264,10 +321,12 @@ def gen_worker(Q, physics_device):
                         gen_logps = torch.tensor([[list(x.values())[0].logprob for x in xx] for xx in zz])
                         data.append(tensor_to_bytes(gen_logps))
 
+                    # Serialize and POST to the reference server; adapt protocol if server requests
                     xdata = make_bytes_list(data)
                     r = requests.post(f"{ref_server}/upload", data=xdata)
                     if r.content == b'string': ref_server_ver = 'string'
             elif ref_server_ver == 'string':
+                # Lightweight JSON upload: send prompt text and raw answers + rewards
                 xdata = make_bytes_list([json.dumps({"Q": pp[0], "As": curr_answers}).encode(), 
                                         tensor_to_bytes(curr_rewards)])
                 r = requests.post(f"{ref_server}/upload", data=xdata)
