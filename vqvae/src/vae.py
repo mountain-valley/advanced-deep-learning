@@ -74,8 +74,8 @@ class VAE(nn.Module):
             mu = self.linear_mu(flattened_feature)
             logvar = self.linear_logvar(flattened_feature)
             std = torch.exp(0.5 * logvar)
-            # 3. Sample latent vector using mu and logvar
-            eps = torch.rand_like(mu) # epsilon
+            # 3. Sample latent vector using mu and logvar (reparameterization trick)
+            eps = torch.randn_like(mu)
             sampled_latent = mu + std * eps
             # 4. Map sampled latent vector back to feature space
             sampled_flat_feature = self.from_latent(sampled_latent)
