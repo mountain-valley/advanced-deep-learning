@@ -87,8 +87,10 @@ class VAE(nn.Module):
 
 
         # Step 6: Compute losses
-        x, mu, logvar = inner_forward(x)
-        reconstruction_loss = F.l1_loss(x, original_x, reduction='mean')
+        x_hat, mu, logvar = inner_forward(x)
+        reconstruction_loss = F.l1_loss(x_hat, original_x, reduction='mean')
         kl_divergence = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
         total_loss = reconstruction_loss + beta * kl_divergence
-        return x, total_loss
+        return x_hat, total_loss
+
+
