@@ -27,6 +27,7 @@ from src.my_vector_quantizer import MyVectorQuantizer
 parser = argparse.ArgumentParser(description="Run VAE experiments")
 parser.add_argument('--data', action='store_true', help='Only download the dataset and exit')
 parser.add_argument('--exp', action='append', choices=['vae', 'vqvae', 'myvqvae', 'fsq'], help='Experiments to run (can specify multiple)')
+parser.add_argument('--epochs', type=int, default=8)  # add this
 args = parser.parse_args()
 
 # -------------------
@@ -56,7 +57,7 @@ if args.data:
 # -------------------
 # Training Utilities
 # -------------------
-epochs = 8
+epochs = args.epochs
 lr = 3e-4
 
 def train_epoch(model, loader, opt, epoch, name, total_epochs, pbar):
