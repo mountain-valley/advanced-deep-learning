@@ -729,6 +729,9 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "torch" },
     { name = "torchvision" },
     { name = "tqdm" },
     { name = "vector-quantize-pytorch" },
@@ -737,6 +740,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.6" },
+    { name = "numpy", specifier = ">=2.3.3" },
+    { name = "pillow", specifier = ">=11.3.0" },
+    { name = "torch", specifier = ">=2.8.0" },
     { name = "torchvision", specifier = ">=0.23.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "vector-quantize-pytorch", specifier = ">=1.23.2" },

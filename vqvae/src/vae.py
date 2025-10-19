@@ -11,16 +11,16 @@ class VAE(nn.Module):
     """
     def __init__(self, dim=128, latent_dim=512):
         super().__init__()
-        self.enc = Encoder(dim)  # Encoder network
-        self.dec = Decoder(dim)  # Decoder network
+        self.enc = Encoder(dim)  # Encoder network (B, 3, 96, 96) -> (B, dim, 24, 24)
+        self.dec = Decoder(dim)  # Decoder network (B, dim, 24, 24) -> (B, 3, 96, 96)
         self.dim = dim  # Feature dimension
         self.latent_dim = latent_dim  # Latent space dimension
         
         self.flattened_size = self.compute_flattened_size(torch.zeros(1, 3, 96, 96))
         
-        self.linear_mu = nn.Linear(self.flattened_size, latent_dim)
-        self.linear_logvar = nn.Linear(self.flattened_size, latent_dim)
-        self.from_latent = nn.Linear(latent_dim, self.flattened_size)
+        self.linear_mu = nn.Linear(self.flattened_size, latent_dim) # flattened_size -> latent_dim
+        self.linear_logvar = nn.Linear(self.flattened_size, latent_dim) # flattened_size -> latent_dim
+        self.from_latent = nn.Linear(latent_dim, self.flattened_size) # latent_dim -> flattened_size
         
     def compute_flattened_size(self, x):
         """
@@ -65,7 +65,26 @@ class VAE(nn.Module):
                 logvar (Tensor): Log-variance of the latent distribution, shape (B, latent_dim).
             """
             # TODO: Implement steps 1-5 as described in the instructions.
-            pass
+            # 1. Encode x to get feature map
+            B = x.size(0)
+            feature_tensor = self.enc(x)
+            # flatten
+            flattened_feature = feature_tensor.view(B, self.flattened_size)
+            # 2. Extract mu and logvar from encoded features
+            mu = self.linear_mu(flattened_feature)
+            logvar = self.linear_logvar(flattened_feature)
+            std = torch.exp(0.5 * logvar)
+            # 3. Sample latent vector using mu and logvar
+            eps = torch.rand_like(mu) # epsilon
+            sampled_latent = mu + std * eps
+            # 4. Map sampled latent vector back to feature space
+            sampled_flat_feature = self.from_latent(sampled_latent)
+            sampled_feature = sampled_flat_feature.view_as(feature_tensor)
+            # 5. Decode
+            reconstructed_x = self.dec(sampled_feature)
+
+            return reconstructed_x, mu, logvar
+
 
         # Step 6: Compute losses
         x, mu, logvar = inner_forward(x)

@@ -36,7 +36,7 @@ class VQVAE(nn.Module):
         """
         # TODO: Implement the forward pass as described in the instructions.
         ###################################
-        pass
+        
         
         ###################################
         # return x_hat, reconstruction_loss + commit_loss, (H*W, self.vq.codebook_size, indices)

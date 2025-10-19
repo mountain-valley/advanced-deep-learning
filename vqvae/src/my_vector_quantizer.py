@@ -20,12 +20,12 @@ class MyVectorQuantizer(nn.Module):
     """
     def __init__(self, dim, codebook_size, decay=0.99, commitment_weight=0.25, epsilon=1e-5, threshold_ema_dead_code=2):
         super().__init__()
-        self.dim = dim
-        self.codebook_size = codebook_size
-        self.decay = decay
-        self.commitment_weight = commitment_weight
-        self.epsilon = epsilon
-        self.threshold_ema_dead_code = threshold_ema_dead_code
+        self.dim = dim # Dimensionality of each codebook vector
+        self.codebook_size = codebook_size # Number of codebook vectors
+        self.decay = decay # EMA decay factor
+        self.commitment_weight = commitment_weight # Weight for commitment loss
+        self.epsilon = epsilon # Small value to avoid division by zero
+        self.threshold_ema_dead_code = threshold_ema_dead_code # Threshold for considering a code "dead"
         
         # Codebook: Learnable embedding layer storing quantized vectors
         self.embedding = nn.Embedding(self.codebook_size, self.dim)
@@ -80,7 +80,11 @@ class MyVectorQuantizer(nn.Module):
                 Tensor: Distances, shape (B*N, codebook_size).
             """
             # TODO: Implement distance calculation as described in the instructions. 
-            pass
+            z_sq = (z * z).sum(dim=1, keepdim=True)          # (B*N, 1)
+            e_sq = (e * e).sum(dim=1, keepdim=True)  # (codebook_size, 1)
+            z_e = 2 * torch.matmul(z, torch.transpose(e)) # (B*N, codebook_size)
+            return z_sq + e_sq - 2.0 * z_e
+        
         
         z = flattened_latents
         e = self.embedding.weight
@@ -98,7 +102,10 @@ class MyVectorQuantizer(nn.Module):
                     - nearest_indices_flat (Tensor): Indices of nearest codebook entries, shape (B*N,).
             """
             # TODO: Implement finding nearest codebook vectors as described in the instructions. [Hint: Use argmin()] [One Line Each]
-            pass
+            nearest_indices_flat = torch.argmin(distances_to_codebook, dim=1)
+            quantized_latents_flat = self.embedding.weight[nearest_indices_flat, :]
+            return quantized_latents_flat, nearest_indices_flat
+
 
         quantized_latents_flat, indices_flat = find_quantized_latents(distances)
         quantized_latents = quantized_latents_flat.view(B, N, D)
@@ -128,7 +135,8 @@ class MyVectorQuantizer(nn.Module):
                     Tensor: Normalized embeddings, shape (codebook_size, D). Think "Mean of vectors assigned to each code".
                 """
                 # TODO: Implement normalization as described in the instructions. [One Line]
-                pass
+                normalized_embeds = self.ema_embeddings / (self.ema_cluster_size.unsqueeze(1) + self.epsilon)
+                return normalized_embeds
 
             normalized_embeds = normalize_with_ema(self.ema_embeddings, self.ema_cluster_size, self.epsilon)
             self.embedding.weight.data.copy_(normalized_embeds)
@@ -149,7 +157,7 @@ class MyVectorQuantizer(nn.Module):
                 Tensor: Quantized latents with STE applied, shape (B, N, D).
             """
             # TODO: Implement STE as described in the instructions. [Hint: Use detach()] [One Line]
-            pass
+            return encoded_latents + (quantized_latents - encoded_latents).detach() # (B, N, D)
 
         quantized_latents = apply_ste(quantized_latents, encoded_latents)
         quantized_indices = indices_flat.view(B, N)
