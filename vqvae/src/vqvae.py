@@ -36,7 +36,20 @@ class VQVAE(nn.Module):
         """
         # TODO: Implement the forward pass as described in the instructions.
         ###################################
-        
-        
+        B = x.size(0)
+        feature_tensor = self.enc(x) # shape (B, dim, H, W)
+        # flattened_feature = feature_tensor.view(B, -1) # shape (B, N) where N=dim*H*W
+        quantized_latents, indices, commitment_loss = self.vq.forward(feature_tensor)
+        # quantized_latents = quantized_latents.view(B, -1, self.vq.dim) # shape (B, N, D)
+        feature_tensor = quantized_latents.view_as(feature_tensor) # shape (B, dim, H, W)
+        x_hat = self.dec(feature_tensor) # shape (B, 3, H, W)
+
+        # Compute losses
+        reconstruction_loss = F.l1_loss(x_hat, x, reduction='mean')
+        H, W = feature_tensor.size(2), feature_tensor.size(3)
+        num_tokens = H * W
+        codebook_size = self.vq.codebook_size
+        total_loss = reconstruction_loss + commitment_loss
+
         ###################################
-        # return x_hat, reconstruction_loss + commit_loss, (H*W, self.vq.codebook_size, indices)
+        return x_hat, total_loss, (num_tokens, codebook_size, indices)
