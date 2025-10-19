@@ -81,8 +81,8 @@ class MyVectorQuantizer(nn.Module):
             """
             # TODO: Implement distance calculation as described in the instructions. 
             z_sq = (z * z).sum(dim=1, keepdim=True)          # (B*N, 1)
-            e_sq = (e * e).sum(dim=1, keepdim=True)  # (codebook_size, 1)
-            z_e = 2 * torch.matmul(z, torch.transpose(e)) # (B*N, codebook_size)
+            e_sq = (e * e).sum(dim=1, keepdim=False).unsqueeze(0)   # (1, codebook_size)
+            z_e  = z @ e.t()                                        # (B*N, codebook_size)
             return z_sq + e_sq - 2.0 * z_e
         
         

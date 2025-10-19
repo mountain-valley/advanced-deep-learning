@@ -36,13 +36,24 @@ class VQVAE(nn.Module):
         """
         # TODO: Implement the forward pass as described in the instructions.
         ###################################
+        # 1. Encode x to get feature map
         B = x.size(0)
         feature_tensor = self.enc(x) # shape (B, dim, H, W)
-        # flattened_feature = feature_tensor.view(B, -1) # shape (B, N) where N=dim*H*W
-        quantized_latents, indices, commitment_loss = self.vq.forward(feature_tensor)
-        # quantized_latents = quantized_latents.view(B, -1, self.vq.dim) # shape (B, N, D)
-        feature_tensor = quantized_latents.view_as(feature_tensor) # shape (B, dim, H, W)
-        x_hat = self.dec(feature_tensor) # shape (B, 3, H, W)
+
+        # 2. Reshape and permute feature map for VQ layer
+        _, dim, H, W = feature_tensor.shape
+        # vector quantizer expects shape (B, N, D) where B=batch, N=tokens, D=dim.
+        tokens = feature_tensor.permute(0, 2, 3, 1).contiguous().view(B, H * W, dim) # shape (B, N, D) where N=H*W.
+        
+        # 3. Quantize using VQ layer
+        quantized_latents, indices, commitment_loss = self.vq(tokens)
+
+        # 4. Reshape and permute quantized output back to feature map shape
+        # (B, N, D) -> (B, H, W, dim) -> (B, dim, H, W)
+        quantized_feature = quantized_latents.view(B, H, W, dim).permute(0, 3, 1, 2).contiguous()
+
+        # 5. Decode
+        x_hat = self.dec(quantized_feature) # shape (B, 3, H, W)
 
         # Compute losses
         reconstruction_loss = F.l1_loss(x_hat, x, reduction='mean')
